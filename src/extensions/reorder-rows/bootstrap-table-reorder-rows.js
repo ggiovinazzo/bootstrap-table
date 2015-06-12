@@ -61,7 +61,7 @@
             }, 1);
         };
     
-	_init.apply(this, Array.prototype.slice.apply(arguments));
+		_init.apply(this, Array.prototype.slice.apply(arguments));
     };
 
     BootstrapTable.prototype.initSearch = function () {

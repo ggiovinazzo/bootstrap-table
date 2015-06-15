@@ -2345,7 +2345,7 @@
 /**
  * @author: Dennis Hernández
  * @webSite: http://djhvscf.github.io/Blog
- * @version: v1.1.0
+ * @version: v1.2.0
  *
  * @update zhixin wen <wenzhixin2010@gmail.com>
  */
@@ -2353,7 +2353,7 @@
 (function ($) {
     'use strict';
 
-    var idsStateSaveList = {
+    var cookieIds = {
         sortOrder: 'bs.table.sortOrder',
         sortName: 'bs.table.sortName',
         pageNumber: 'bs.table.pageNumber',
@@ -2366,20 +2366,17 @@
         return (navigator.cookieEnabled) ? true : false;
     };
 
-    var setCookie = function (that, cookieName, sValue, sPath, sDomain, bSecure) {
-        if ((!that.options.stateSave) || (!cookieEnabled()) || (that.options.stateSaveIdTable === '')) {
+    var setCookie = function (that, cookieName, sValue) {
+        if ((!that.options.stateSave) || (!cookieEnabled()) || (that.options.cookieIdTable === '')) {
             return;
         }
 
-        var tableName = that.options.stateSaveIdTable,
-            vEnd = that.options.stateSaveExpire;
-
-        cookieName = tableName + '.' + cookieName;
+        cookieName = that.options.cookieIdTable + '.' + cookieName;
         if (!cookieName || /^(?:expires|max\-age|path|domain|secure)$/i.test(cookieName)) {
             return false;
         }
 
-        document.cookie = encodeURIComponent(cookieName) + '=' + encodeURIComponent(sValue) + calculateExpiration(vEnd) + (sDomain ? '; domain=' + sDomain : '') + (sPath ? '; path=' + sPath : '') + (bSecure ? '; secure' : '');
+        document.cookie = encodeURIComponent(cookieName) + '=' + encodeURIComponent(sValue) + calculateExpiration(that.options.cookieExpire) + (that.options.cookieDomain ? '; domain=' + that.options.cookieDomain : '') + (that.options.cookiePath ? '; path=' + that.options.cookiePath : '') + (that.cookieSecure ? '; secure' : '');
         return true;
     };
 
@@ -2407,41 +2404,44 @@
         return true;
     };
 
-    var calculateExpiration = function(vEnd) {
-        var time = vEnd.replace(/[0-9]/, ''); //s,mi,h,d,m,y
-        vEnd = vEnd.replace(/[A-Za-z]/, ''); //number
+    var calculateExpiration = function(cookieExpire) {
+        var time = cookieExpire.replace(/[0-9]/, ''); //s,mi,h,d,m,y
+        cookieExpire = cookieExpire.replace(/[A-Za-z]/, ''); //number
 
         switch (time.toLowerCase()) {
             case 's':
-                vEnd = +vEnd;
+                cookieExpire = +cookieExpire;
                 break;
             case 'mi':
-                vEnd = vEnd * 60;
+                cookieExpire = cookieExpire * 60;
                 break;
             case 'h':
-                vEnd = vEnd * 60 * 60;
+                cookieExpire = cookieExpire * 60 * 60;
                 break;
             case 'd':
-                vEnd = vEnd * 24 * 60 * 60;
+                cookieExpire = cookieExpire * 24 * 60 * 60;
                 break;
             case 'm':
-                vEnd = vEnd * 30 * 24 * 60 * 60;
+                cookieExpire = cookieExpire * 30 * 24 * 60 * 60;
                 break;
             case 'y':
-                vEnd = vEnd * 365 * 30 * 24 * 60 * 60;
+                cookieExpire = cookieExpire * 365 * 30 * 24 * 60 * 60;
                 break;
             default:
-                vEnd = undefined;
+                cookieExpire = undefined;
                 break;
         }
 
-        return vEnd === undefined ? '' : '; max-age=' + vEnd;
-    }
+        return cookieExpire === undefined ? '' : '; max-age=' + cookieExpire;
+    };
 
     $.extend($.fn.bootstrapTable.defaults, {
-        stateSave: false,
-        stateSaveExpire: '2h',
-        stateSaveIdTable: ''
+        cookie: false,
+        cookieExpire: '2h',
+        cookiePath: null,
+        cookieDomain: null,
+        cookieSecure: null,
+        cookieIdTable: ''
     });
 
     $.fn.bootstrapTable.methods.push('deleteCookie');
@@ -2461,11 +2461,11 @@
     // init save data after initTable function
     BootstrapTable.prototype.initTable = function () {
         _initTable.apply(this, Array.prototype.slice.apply(arguments));
-        this.initStateSave();
+        this.initCookie();
     };
 
-    BootstrapTable.prototype.initStateSave = function () {
-        if (!this.options.stateSave) {
+    BootstrapTable.prototype.initCookie = function () {
+        if (!this.options.cookie) {
             return;
         }
 
@@ -2473,79 +2473,69 @@
             return;
         }
 
-        if (this.options.stateSaveIdTable === '') {
+        if (this.options.cookieIdTable === '' || this.options.cookieExpire === '') {
             return;
         }
 
-        var sortOrderStateSave = getCookie(this.options.stateSaveIdTable, idsStateSaveList.sortOrder),
-            sortOrderStateName = getCookie(this.options.stateSaveIdTable, idsStateSaveList.sortName),
-            pageNumberStateSave = getCookie(this.options.stateSaveIdTable, idsStateSaveList.pageNumber),
-            pageListStateSave = getCookie(this.options.stateSaveIdTable, idsStateSaveList.pageList),
-            columnsStateSave = JSON.parse(getCookie(this.options.stateSaveIdTable, idsStateSaveList.columns)),
-            searchStateSave = getCookie(this.options.stateSaveIdTable, idsStateSaveList.searchText);
+        var sortOrderCookie = getCookie(this.options.cookieIdTable, cookieIds.sortOrder),
+            sortOrderNameCookie = getCookie(this.options.cookieIdTable, cookieIds.sortName),
+            pageNumberCookie = getCookie(this.options.cookieIdTable, cookieIds.pageNumber),
+            pageListCookie = getCookie(this.options.cookieIdTable, cookieIds.pageList),
+            columnsCookie = JSON.parse(getCookie(this.options.cookieIdTable, cookieIds.columns)),
+            searchTextCookie = getCookie(this.options.cookieIdTable, cookieIds.searchText);
 
-        if (sortOrderStateSave) {
-            this.options.sortOrder = sortOrderStateSave;
-            this.options.sortName = sortOrderStateName;
-        }
+        //sortOrder
+        this.options.sortOrder = sortOrderCookie ? sortOrderCookie : 'asc';
+        //sortName
+        this.options.sortName = sortOrderNameCookie ? sortOrderNameCookie : undefined;
+        //pageNumber
+        this.options.pageNumber = pageNumberCookie ? +pageNumberCookie : 1;
+        //pageSize
+        this.options.pageSize = pageListCookie ? pageListCookie === this.options.formatAllRows() ? pageListCookie : +pageListCookie : 10;
+        //searchText
+        this.options.searchText = searchTextCookie ? searchTextCookie : '';
 
-        if (pageNumberStateSave) {
-            this.options.pageNumber = +pageNumberStateSave;
-        }
-
-        if (pageListStateSave) {
-            this.options.pageSize = pageListStateSave ===
-                this.options.formatAllRows() ? pageListStateSave : +pageListStateSave;
-        }
-
-        if (columnsStateSave) {
+        if (columnsCookie) {
             $.each(this.options.columns, function (i, column) {
-                column.visible = columnsStateSave.indexOf(column.field) !== -1;
+                column.visible = columnsCookie.indexOf(column.field) !== -1;
             });
-        }
-
-        if (searchStateSave) {
-            this.options.searchText = searchStateSave;
         }
     };
 
     BootstrapTable.prototype.onSort = function () {
         _onSort.apply(this, Array.prototype.slice.apply(arguments));
-
-        setCookie(this, idsStateSaveList.sortOrder, this.options.sortOrder);
-        setCookie(this, idsStateSaveList.sortName, this.options.sortName);
+        setCookie(this, cookieIds.sortOrder, this.options.sortOrder);
+        setCookie(this, cookieIds.sortName, this.options.sortName);
     };
 
     BootstrapTable.prototype.onPageNumber = function () {
         _onPageNumber.apply(this, Array.prototype.slice.apply(arguments));
-
-        setCookie(this, idsStateSaveList.pageNumber, this.options.pageNumber);
+        setCookie(this, cookieIds.pageNumber, this.options.pageNumber);
     };
 
     BootstrapTable.prototype.onPageListChange = function () {
         _onPageListChange.apply(this, Array.prototype.slice.apply(arguments));
-
-        setCookie(this, idsStateSaveList.pageList, this.options.pageSize);
+        setCookie(this, cookieIds.pageList, this.options.pageSize);
     };
 
     BootstrapTable.prototype.onPageFirst = function () {
         _onPageFirst.apply(this, Array.prototype.slice.apply(arguments));
-        setCookie(this, idsStateSaveList.pageNumber, this.options.pageNumber);
+        setCookie(this, cookieIds.pageNumber, this.options.pageNumber);
     };
 
     BootstrapTable.prototype.onPagePre = function () {
         _onPagePre.apply(this, Array.prototype.slice.apply(arguments));
-        setCookie(this, idsStateSaveList.pageNumber, this.options.pageNumber);
+        setCookie(this, cookieIds.pageNumber, this.options.pageNumber);
     };
 
     BootstrapTable.prototype.onPageNext = function () {
         _onPageNext.apply(this, Array.prototype.slice.apply(arguments));
-        setCookie(this, idsStateSaveList.pageNumber, this.options.pageNumber);
+        setCookie(this, cookieIds.pageNumber, this.options.pageNumber);
     };
 
     BootstrapTable.prototype.onPageLast = function () {
         _onPageLast.apply(this, Array.prototype.slice.apply(arguments));
-        setCookie(this, idsStateSaveList.pageNumber, this.options.pageNumber);
+        setCookie(this, cookieIds.pageNumber, this.options.pageNumber);
     };
 
     BootstrapTable.prototype.toggleColumn = function () {
@@ -2553,19 +2543,18 @@
 
         var visibleColumns = [];
 
-        $.each(this.options.columns, function (i) {
-            if (this.visible) {
-                visibleColumns.push(this.field);
+        $.each(this.options.columns, function (i, column) {
+            if (column.visible) {
+                visibleColumns.push(column.field);
             }
         });
 
-        setCookie(this, idsStateSaveList.columns, JSON.stringify(visibleColumns));
+        setCookie(this, cookieIds.columns, JSON.stringify(visibleColumns));
     };
 
     BootstrapTable.prototype.onSearch = function () {
         _onSearch.apply(this, Array.prototype.slice.apply(arguments));
-
-        setCookie(this, idsStateSaveList.searchText, this.searchText);
+        setCookie(this, cookieIds.searchText, this.searchText);
     };
 
     BootstrapTable.prototype.deleteCookie = function (cookieName) {
@@ -2573,7 +2562,7 @@
             return;
         }
 
-        deleteCookie(idsStateSaveList[cookieName]);
+        deleteCookie(cookieIds[cookieName], this.options.cookiePath, this.options.cookieDomain);
     };
 })(jQuery);
 
@@ -2809,15 +2798,16 @@
         return defaultValue;
     };
 
-    var addValueToSelectControl = function (selectControl, value, text) {
-        if (existsValueInSelectControl(selectControl, value)) {
+    var addOptionToSelectControl = function (selectControl, value, text) {
+        //selectControl = $(selectControl.get(0));
+        if (existsOptionInSelectControl(selectControl, value)) {
             selectControl.append($("<option></option>")
                 .attr("value", value)
                 .text(text));
         }
     };
 
-    var existsValueInSelectControl = function (selectControl, value) {
+    var existsOptionInSelectControl = function (selectControl, value) {
         var options = selectControl.get(0).options,
             iOpt = 0;
 
@@ -2839,13 +2829,26 @@
     var copyValues = function (that) {
         that.options.values = [];
         that.$tableHeader.find('table select, table input').each(function () {
-            that.options.values.push($(this).val());
+            that.options.values.push(
+                {
+                    field: $(this).parent().parent().parent().data('field'),
+                    value: $(this).val()
+                });
         });
     };
 
     var setValues = function(that) {
+        var field = null;
         that.$tableHeader.find('table select, table input').each(function (index, ele) {
-            $(this).val(that.options.values[index]);
+            if (that.options.values.length > 0) {
+                field = $(this).parent().parent().parent().data('field');
+                for (var i = 0; i < that.options.values.length; i++) {
+                    if (field === that.options.values[i].field) {
+                        $(this).val(that.options.values[i].value);
+                        break;
+                    }
+                }
+            }
         });
     };
 
@@ -2898,7 +2901,7 @@
                 var filterDataType = column.filterData.substring(0, 3);
                 var filterDataSource = column.filterData.substring(4, column.filterData.length);
                 var selectControl = $('.' + column.field);
-                addValueToSelectControl(selectControl, '', '');
+                addOptionToSelectControl(selectControl, '', '');
 
                 switch (filterDataType) {
                     case 'url':
@@ -2907,7 +2910,7 @@
                             dataType: 'json',
                             success: function (data) {
                                 $.each(data, function (key, value) {
-                                    addValueToSelectControl(selectControl, key, value);
+                                    addOptionToSelectControl(selectControl, key, value);
                                 });
                             }
                         });
@@ -2915,7 +2918,7 @@
                     case 'var':
                         var variableValues = window[filterDataSource];
                         for (var key in variableValues) {
-                            addValueToSelectControl(selectControl, key, variableValues[key]);
+                            addOptionToSelectControl(selectControl, key, variableValues[key]);
                         }
                         break;
                 }
@@ -2937,14 +2940,10 @@
                 }, that.options.searchTimeOut);
             });
 
-            var datepickers = that.$header.find('.date-filter-control');
+            var datepickers = header.find('.date-filter-control');
             if (datepickers.length > 0) {
                 $.each(that.options.columns, function (i, column) {
                     if (column.filterControl !== undefined && column.filterControl.toLowerCase() === 'datepicker') {
-                        column.filterDatepickerOptions = $.extend(column.filterDatepickerOptions, {
-                            calendarWeeks: true
-                        });
-
                         header.find('.date-filter-control.' + column.field).datepicker(column.filterDatepickerOptions)
                             .on('changeDate', function (e) {
                                 //Fired the keyup event
@@ -2963,7 +2962,8 @@
         onColumnSearch: function (field, text) {
             return false;
         },
-        values: [] //internal variables
+        //internal variables
+        values: []
     });
 
     $.extend($.fn.bootstrapTable.COLUMN_DEFAULTS, {
@@ -2986,8 +2986,10 @@
         //Make sure that the filtercontrol option is set
         if (this.options.filterControl) {
             var that = this;
-            this.$el.on('reset-view.bs.table', function () {
+            //Make sure that the internal variables are set correctly
+            this.options.values = [];
 
+            this.$el.on('reset-view.bs.table', function () {
                 //Create controls on $tableHeader if the height is set
                 if (!that.options.height) {
                     return;
@@ -3001,9 +3003,7 @@
                 createControls(that, that.$tableHeader);
             }).on('post-header.bs.table', function () {
                 setValues(that);
-            });
-
-            this.$el.on('post-body.bs.table', function () {
+            }).on('post-body.bs.table', function () {
                 if (that.options.height) {
                     fixHeaderCSS(that);
                 }
@@ -3025,9 +3025,10 @@
         _initBody.apply(this, Array.prototype.slice.apply(arguments));
 
         var that = this,
-            data = this.getData();
+            data = this.options.data,
+            pageTo = this.pageTo < this.options.data.length ? this.options.data.length : this.pageTo;
 
-        for (var i = this.pageFrom - 1; i < this.pageTo; i++) {
+        for (var i = this.pageFrom - 1; i < pageTo; i++) {
             var key,
                 item = data[i];
 
@@ -3047,11 +3048,11 @@
                             if (selectControl !== undefined && selectControl.length > 0) {
                                 if (selectControl.get(0).options.length === 0) {
                                     //Added the default option
-                                    addValueToSelectControl(selectControl, '', '');
+                                    addOptionToSelectControl(selectControl, '', '');
                                 }
 
                                 //Added a new value
-                                addValueToSelectControl(selectControl, value, value);
+                                addOptionToSelectControl(selectControl, value, value);
                             }
                         }
                     }
@@ -3176,71 +3177,63 @@
 /**
  * @author: Dennis Hernández
  * @webSite: http://djhvscf.github.io/Blog
- * @version: v1.2.0
+ * @version: v1.3.0
  */
-
 
 (function ($) {
     'use strict';
 
+    var flat = function (element, that) {
+        var result = {};
+
+        function recurse(cur, prop) {
+            if (Object(cur) !== cur) {
+                result[prop] = cur;
+            } else if ($.isArray(cur)) {
+                for (var i = 0, l = cur.length; i < l; i++) {
+                    recurse(cur[i], prop ? prop + that.options.flatSeparator + i : "" + i);
+                    if (l == 0) {
+                        result[prop] = [];
+                    }
+                }
+            } else {
+                var isEmpty = true;
+                for (var p in cur) {
+                    isEmpty = false;
+                    recurse(cur[p], prop ? prop + that.options.flatSeparator + p : p);
+                }
+                if (isEmpty) {
+                    result[prop] = {};
+                }
+            }
+        }
+
+        recurse(element, "");
+        return result;
+    };
+
+    var flatHelper = function (data, that) {
+        var flatArray = [];
+
+        $.each(!$.isArray(data) ? [data] : data, function (i, element) {
+            flatArray.push(flat(element, that));
+        });
+        return flatArray;
+    };
+
     $.extend($.fn.bootstrapTable.defaults, {
-        flat: false
+        flat: false,
+        flatSeparator: '.'
     });
 
     var BootstrapTable = $.fn.bootstrapTable.Constructor,
         _initData = BootstrapTable.prototype.initData;
 
     BootstrapTable.prototype.initData = function (data, type) {
-        if( this.options.flat ){
-            data = data === undefined ? this.options.data : data;
-            data = sd.flatHelper(data);
+        if (this.options.flat) {
+            data = flatHelper(data ? data : this.options.data, this);
         }
         _initData.apply(this, [data, type]);
-    };
-
-    //Main functions
-    var sd = {
-        flat: function (element) {
-            var result = {};
-
-            function recurse(cur, prop) {
-                if (Object(cur) !== cur) {
-                    result[prop] = cur;
-                } else if ($.isArray(cur)) {
-                    for (var i = 0, l = cur.length; i < l; i++) {
-                        recurse(cur[i], prop ? prop + "." + i : "" + i);
-                        if (l == 0) {
-                            result[prop] = [];
-                        }
-                    }
-                } else {
-                    var isEmpty = true;
-                    for (var p in cur) {
-                        isEmpty = false;
-                        recurse(cur[p], prop ? prop + "." + p : p);
-                    }
-                    if (isEmpty) {
-                        result[prop] = {};
-                    }
-                }
-            }
-
-            recurse(element, "");
-            return result;
-        },
-
-        flatHelper: function (data) {
-            var flatArray = [],
-                arrayHelper = [];
-            if (!$.isArray(data)) {
-                arrayHelper.push(data);
-                data = arrayHelper;
-            }
-            $.each(data, function (i, element) {
-                flatArray.push(sd.flat(element));
-            });
-            return flatArray;
-        }
     };
 })(jQuery);
 
@@ -3265,7 +3258,6 @@
 
     BootstrapTable.prototype.init = function () {
         _init.apply(this, Array.prototype.slice.apply(arguments));
-
         this.initKeyEvents();
     };
 
@@ -3338,7 +3330,7 @@
 
     var resetView = function (that) {
         if (that.options.height || that.options.showFooter) {
-            setTimeout(that.resetView(), 1);
+            setTimeout(that.resetView, 1);
         }
     };
 
@@ -3431,13 +3423,16 @@
     };
 
     var showSortModal = function(that) {
-        if (!$("#sortModal").hasClass("modal")) {
-            var sModal = '  <div class="modal fade" id="sortModal" tabindex="-1" role="dialog" aria-labelledby="sortModalLabel" aria-hidden="true">';
+        var _selector = that.$sortModal.selector,
+            _id = _selector.substr(1);
+
+        if (!$(_id).hasClass("modal")) {
+            var sModal = '  <div class="modal fade" id="' + _id + '" tabindex="-1" role="dialog" aria-labelledby="' + _id + 'Label" aria-hidden="true">';
             sModal += '         <div class="modal-dialog">';
             sModal += '             <div class="modal-content">';
             sModal += '                 <div class="modal-header">';
             sModal += '                     <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>';
-            sModal += '                     <h4 class="modal-title" id="sortModalLabel">' + that.options.formatMultipleSort() + '</h4>';
+            sModal += '                     <h4 class="modal-title" id="' + _id + 'Label">' + that.options.formatMultipleSort() + '</h4>';
             sModal += '                 </div>';
             sModal += '                 <div class="modal-body">';
             sModal += '                     <div class="bootstrap-table">';
@@ -3473,12 +3468,12 @@
 
             $("body").append($(sModal));
 
-            var $sortModal = $('#sortModal'),
-                $rows = $sortModal.find("tbody > tr");
+            that.$sortModal = $(_selector);
+            var $rows = that.$sortModal.find("tbody > tr");
 
-            $sortModal.off('click', '#add').on('click', '#add', function() {
-                var total = $sortModal.find('.multi-sort-name:first option').length,
-                    current = $sortModal.find('tbody tr').length;
+            that.$sortModal.off('click', '#add').on('click', '#add', function() {
+                var total = that.$sortModal.find('.multi-sort-name:first option').length,
+                    current = that.$sortModal.find('tbody tr').length;
 
                 if (current < total) {
                     current++;
@@ -3487,20 +3482,20 @@
                 }
             });
 
-            $sortModal.off('click', '#delete').on('click', '#delete', function() {
-                var total = $sortModal.find('.multi-sort-name:first option').length,
-                    current = $sortModal.find('tbody tr').length;
+            that.$sortModal.off('click', '#delete').on('click', '#delete', function() {
+                var total = that.$sortModal.find('.multi-sort-name:first option').length,
+                    current = that.$sortModal.find('tbody tr').length;
 
                 if (current > 1 && current <= total) {
                     current--;
-                    $sortModal.find('tbody tr:last').remove();
+                    that.$sortModal.find('tbody tr:last').remove();
                     that.setButtonStates();
                 }
             });
 
-            $sortModal.off('click', '.btn-primary').on('click', '.btn-primary', function() {
-                var $rows = $sortModal.find("tbody > tr"),
-                    $alert = $sortModal.find('div.alert'),
+            that.$sortModal.off('click', '.btn-primary').on('click', '.btn-primary', function() {
+                var $rows = that.$sortModal.find("tbody > tr"),
+                    $alert = that.$sortModal.find('div.alert'),
                     fields = [],
                     results = [];
 
@@ -3529,7 +3524,7 @@
                 if (results.length > 0) {
                     if ($alert.length === 0) {
                         $alert = '<div class="alert alert-danger" role="alert"><strong>' + that.options.formatDuplicateAlertTitle() + '</strong> ' + that.options.formatDuplicateAlertDescription() + '</div>';
-                        $($alert).insertBefore($sortModal.find('.bars'));
+                        $($alert).insertBefore(that.$sortModal.find('.bars'));
                     }
                 } else {
                     if ($alert.length === 1) {
@@ -3538,7 +3533,7 @@
 
                     that.options.sortName = "";
                     that.onMultipleSort();
-                    $sortModal.modal('hide');
+                    that.$sortModal.modal('hide');
                 }
             });
 
@@ -3626,7 +3621,9 @@
 
     BootstrapTable.prototype.initToolbar = function() {
         this.showToolbar = true;
-        var that = this;
+        var that = this,
+            sortModalId = '#sortModal_' + this.$el.attr('id');
+        this.$sortModal = $(sortModalId);
 
         _initToolbar.apply(this, Array.prototype.slice.apply(arguments));
 
@@ -3635,7 +3632,7 @@
                 $multiSortBtn = $btnGroup.find('div.multi-sort');
 
             if (!$multiSortBtn.length) {
-                $multiSortBtn = '  <button class="multi-sort btn btn-default' + (this.options.iconSize === undefined ? '' : ' btn-' + this.options.iconSize) + '" type="button" data-toggle="modal" data-target="#sortModal" title="' + this.options.formatMultipleSort() + '">';
+                $multiSortBtn = '  <button class="multi-sort btn btn-default' + (this.options.iconSize === undefined ? '' : ' btn-' + this.options.iconSize) + '" type="button" data-toggle="modal" data-target="' + sortModalId + '" title="' + this.options.formatMultipleSort() + '">';
                 $multiSortBtn += '     <i class="' + this.options.iconsPrefix + ' ' + this.options.icons.sort + '"></i>';
                 $multiSortBtn += '</button>';
 
@@ -3644,7 +3641,7 @@
                 showSortModal(that);
             }
 
-            this.$el.one('sort.bs.table', function() {
+            this.$el.on('sort.bs.table', function() {
                 isSingleSort = true;
             });
 
@@ -3666,12 +3663,14 @@
                 }
 
                 that.assignSortableArrows();
-                $('#sortModal').remove();
+                that.$sortModal.remove();
                 showSortModal(that);
             });
 
             this.$el.on('reset-view.bs.table', function() {
-                that.assignSortableArrows();
+                if (!isSingleSort && that.options.sortPriority !== null && typeof that.options.sortPriority === 'object') {
+                    that.assignSortableArrows();
+                }
             });
         }
     };
@@ -3725,18 +3724,17 @@
     };
 
     BootstrapTable.prototype.addLevel = function(index, sortPriority) {
-        var $sortModal = $("#sortModal"),
-            text = index === 0 ? this.options.formatSortBy() : this.options.formatThenBy();
+        var text = index === 0 ? this.options.formatSortBy() : this.options.formatThenBy();
 
-        $sortModal.find('tbody')
+        this.$sortModal.find('tbody')
             .append($('<tr>')
                 .append($('<td>').text(text))
                 .append($('<td>').append($('<select class="form-control multi-sort-name">')))
                 .append($('<td>').append($('<select class="form-control multi-sort-order">')))
-            );
+        );
 
-        var $multiSortName = $sortModal.find('.multi-sort-name').last(),
-            $multiSortOrder = $sortModal.find('.multi-sort-order').last();
+        var $multiSortName = this.$sortModal.find('.multi-sort-name').last(),
+            $multiSortOrder = this.$sortModal.find('.multi-sort-order').last();
 
         this.options.columns.forEach(function(column) {
             if (column.sortable === false || column.visible === false) {
@@ -3762,32 +3760,30 @@
         for (var i = 0; i < headers.length; i++) {
             for (var c = 0; c < that.options.sortPriority.length; c++) {
                 if ($(headers[i]).data('field') === that.options.sortPriority[c].sortName) {
-                    $(headers[i]).find('.sortable').addClass(that.options.sortPriority[c].sortOrder);
+                    $(headers[i]).find('.sortable').removeClass('desc asc').addClass(that.options.sortPriority[c].sortOrder);
                 }
             }
         }
     };
 
     BootstrapTable.prototype.setButtonStates = function() {
-        var $sortModal = $('#sortModal'),
-            total = $sortModal.find('.multi-sort-name:first option').length,
-            current = $sortModal.find('tbody tr').length;
+        var total = this.$sortModal.find('.multi-sort-name:first option').length,
+            current = this.$sortModal.find('tbody tr').length;
 
         if (current == total) {
-            $sortModal.find('#add').attr('disabled', 'disabled');
+            this.$sortModal.find('#add').attr('disabled', 'disabled');
         }
         if (current > 1) {
-            $sortModal.find('#delete').removeAttr('disabled');
+            this.$sortModal.find('#delete').removeAttr('disabled');
         }
         if (current < total) {
-            $sortModal.find('#add').removeAttr('disabled');
+            this.$sortModal.find('#add').removeAttr('disabled');
         }
         if (current == 1) {
-            $sortModal.find('#delete').attr('disabled', 'disabled');
+            this.$sortModal.find('#delete').attr('disabled', 'disabled');
         }
     };
 })(jQuery);
-
 /**
  * @author: Brian Huisman
  * @webSite: http://www.greywyvern.com
